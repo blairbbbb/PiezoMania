@@ -41,14 +41,14 @@ void loop() {
   lcd.print(" V   ");
 
   // Line 3: Current
-  lcd.setCursor(6, 2);
+  lcd.setCursor(9, 2);
   lcd.print(current_mA, 1);
   lcd.print(" mA ");
 
   // Line 4: Power
-  lcd.setCursor(6, 3);
+  lcd.setCursor(7, 3);
   lcd.print(power_mW, 0);
   lcd.print(" mW   ");
 
-  delay(300);
+  delay(1000);
 }
