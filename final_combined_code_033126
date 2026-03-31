@@ -1,0 +1,127 @@
+#include <LiquidCrystal.h>
+#include <Wire.h>
+#include <Adafruit_INA219.h>
+#include <Adafruit_NeoPixel.h>
+
+// INA219 declaration
+Adafruit_INA219 ina219;
+
+// LCD pin connections
+#define RS 2
+#define EN 3
+#define D4 4
+#define D5 5
+#define D6 6
+#define D7 7
+
+LiquidCrystal lcd(RS, EN, D4, D5, D6, D7);
+
+//NeoPixel LED Strip pin connections
+#define LED_PIN 8 // Switched from original pin 7 due to use in sensor
+#define LED_COUNT 18
+#define PIEZO_PIN A0
+
+Adafruit_NeoPixel strip(LED_COUNT, LED_PIN, NEO_GRB + NEO_KHZ800);
+
+int threshold = 50; //treat as an input if above 50 
+unsigned long lastHitTime = 0;
+unsigned long holdTime = 150; // milliseconds (adjust this!)
+
+
+//timing declarations for better latency
+unsigned long lastLCDupdate = 0;
+unsigned long lastLEDupdate = 0;
+
+const unsigned long LCD_INTERVAL = 1000;  // update LCD once per second
+const unsigned long LED_INTERVAL = 5;     // check piezo + update LEDs every 5 ms
+
+
+
+void setup() {
+  lcd.begin(20, 4);
+  lcd.clear();
+
+  ina219.begin();
+
+  // Optional: print static labels once
+  lcd.setCursor(0, 0); lcd.print("Bus:   ");
+  lcd.setCursor(0, 1); lcd.print("Load: ");
+  lcd.setCursor(0, 2); lcd.print("Current:  ");
+  lcd.setCursor(0, 3); lcd.print("Power:   ");
+
+  //Strip setup
+  strip.begin();
+  strip.setBrightness(50);
+  strip.show(); //do we need this?
+  Serial.begin(115200);
+}
+
+void loop() {
+
+  unsigned long now = millis();
+
+    // --- LCD update every 1000 ms ---
+    if (now - lastLCDupdate >= LCD_INTERVAL) {
+        updateLCD();
+        lastLCDupdate = now;
+    }
+
+    // --- LED + piezo update every 5 ms ---
+    if (now - lastLEDupdate >= LED_INTERVAL) {
+        updateLEDs();
+        lastLEDupdate = now;
+    }
+  
+}
+
+void updateLCD() {
+ 
+  float busvoltage = ina219.getBusVoltage_V();
+  float shuntvoltage = ina219.getShuntVoltage_mV();
+  float loadvoltage = busvoltage + (shuntvoltage / 1000);
+  float current_mA = ina219.getCurrent_mA();
+  float power_mW = ina219.getPower_mW();
+
+  // Line 1: Bus Voltage
+  lcd.setCursor(6, 0);
+  lcd.print(busvoltage, 2);
+  lcd.print(" V   ");
+
+  // Line 2: Load Voltage
+  lcd.setCursor(6, 1);
+  lcd.print(loadvoltage, 2);
+  lcd.print(" V   ");
+
+  // Line 3: Current
+  lcd.setCursor(9, 2);
+  lcd.print(current_mA, 1);
+  lcd.print(" mA ");
+
+  // Line 4: Power
+  lcd.setCursor(7, 3);
+  lcd.print(power_mW, 0);
+  lcd.print(" mW   ");
+}
+
+void updateLEDs() {
+  int sensorValue = analogRead(PIEZO_PIN);
+
+  // Detect hit
+  if (sensorValue > threshold) {
+    lastHitTime = millis();
+  }
+
+  // Keep LEDs on for a short time after hit
+  if (millis() - lastHitTime < holdTime) {
+    showPink();
+  } else {
+    strip.clear();
+    strip.show();
+  }
+}
+void showPink() {
+  for (int i = 0; i < LED_COUNT; i++) {
+    strip.setPixelColor(i, strip.Color(255, 20, 147));
+  }
+  strip.show();
+}
