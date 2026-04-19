@@ -1,0 +1,74 @@
+#include <Adafruit_NeoPixel.h>
+
+#define LED_PIN     6
+#define LED_COUNT   154
+#define BRIGHTNESS  40   // safe for 5V 3A
+
+Adafruit_NeoPixel strip(LED_COUNT, LED_PIN, NEO_GRB + NEO_KHZ800);
+
+// Step input pins
+const int stepPins[4] = {2, 3, 4, 5};
+
+// LED regions (start positions)
+const int regionStart[4] = {0, 36, 75, 115};
+
+// LED counts per region
+const int regionLength[4] = {36, 39, 40, 39};
+
+// Colors
+uint32_t panelColors[4];
+
+void setup() {
+  // Setup inputs
+  for (int i = 0; i < 4; i++) {
+    pinMode(stepPins[i], INPUT_PULLUP);
+  }
+
+  strip.begin();
+  strip.setBrightness(BRIGHTNESS);
+  strip.show();
+
+  // Define colors (UPDATED)
+  panelColors[0] = strip.Color(255, 20, 100); // Step 1 = Pink
+  panelColors[1] = strip.Color(0, 0, 255);    // Step 2 = Blue
+  panelColors[2] = strip.Color(255, 20, 100); // Step 3 = Pink
+  panelColors[3] = strip.Color(0, 0, 255);    // Step 4 = Blue
+}
+
+void loop() {
+  clearStrip();
+
+  for (int i = 0; i < 4; i++) {
+    if (isPressedDebounced(stepPins[i])) {
+      lightRegion(regionStart[i], regionLength[i], panelColors[i]);
+    }
+  }
+
+  strip.show();
+  delay(10);
+}
+
+// Turn everything off
+void clearStrip() {
+  for (int i = 0; i < LED_COUNT; i++) {
+    strip.setPixelColor(i, 0);
+  }
+}
+
+// Light a section
+void lightRegion(int startPixel, int count, uint32_t color) {
+  for (int i = startPixel; i < startPixel + count; i++) {
+    if (i < LED_COUNT) {
+      strip.setPixelColor(i, color);
+    }
+  }
+}
+
+// Simple debounce
+bool isPressedDebounced(int pin) {
+  if (digitalRead(pin) == LOW) {
+    delay(15);
+    return (digitalRead(pin) == LOW);
+  }
+  return false;
+}
