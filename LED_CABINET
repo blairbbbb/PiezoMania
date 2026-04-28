@@ -1,0 +1,48 @@
+#include <Adafruit_NeoPixel.h>
+
+#define LED_PIN 6
+#define LED_COUNT 120
+#define BRIGHTNESS 40   
+
+Adafruit_NeoPixel strip(LED_COUNT, LED_PIN, NEO_GRB + NEO_KHZ800);
+
+// Define colors
+uint32_t blue;
+uint32_t pink;
+
+void setup() {
+  strip.begin();
+  strip.setBrightness(BRIGHTNESS);
+  strip.show();
+
+  // Colors
+  blue = strip.Color(0, 0, 255);
+  pink = strip.Color(255, 20, 100);
+}
+
+void loop() {
+  // Fade from blue → pink
+  for (int i = 0; i <= 255; i++) {
+    setFade(i);
+    delay(10);  // speed (lower = faster)
+  }
+
+  // Fade from pink → blue
+  for (int i = 255; i >= 0; i--) {
+    setFade(i);
+    delay(10);
+  }
+}
+
+void setFade(int amount) {
+  // Interpolate between blue and pink
+  int r = (255 * amount) / 255;
+  int g = (20 * amount) / 255;
+  int b = 255 - ((155 * amount) / 255);
+
+  for (int i = 0; i < LED_COUNT; i++) {
+    strip.setPixelColor(i, strip.Color(r, g, b));
+  }
+
+  strip.show();
+}
