@@ -1,0 +1,164 @@
+#include <Wire.h>
+#include <Adafruit_INA219.h>
+#include <LiquidCrystal_I2C.h>
+#include <Adafruit_NeoPixel.h>
+
+// INA219 + LCD
+Adafruit_INA219 ina219;
+LiquidCrystal_I2C lcd(0x27, 20, 4);
+
+// NeoPixel setup
+#define LED_PIN 6
+#define LED_COUNT 120
+#define BRIGHTNESS 40
+
+Adafruit_NeoPixel strip(LED_COUNT, LED_PIN, NEO_GRB + NEO_KHZ800);
+
+// timing
+unsigned long lastLCDupdate = 0;
+unsigned long lastLEDupdate = 0;
+
+const unsigned long LCD_INTERVAL = 500;
+const unsigned long LED_INTERVAL = 10;
+
+// capacitor value (CRITICAL: set correctly)
+const float CAP_VALUE = 0.001000; // 1000 µF cap
+
+// energy tracking
+float lastEnergy_J = 0;
+float totalEnergy_mJ = 0;
+
+// voltage tracking smoothing
+const int SAMPLES = 10;
+
+// LED fade
+int fadeAmount = 0;
+int fadeDirection = 1;
+
+void setup() {
+  lcd.init();
+  lcd.backlight();
+  lcd.clear();
+
+  Serial.begin(115200);
+
+  if (!ina219.begin()) {
+    Serial.println("INA219 not found!");
+  }
+
+  lcd.setCursor(0, 0);
+  lcd.print("E-Storage Status   "); // padded spaces
+
+  lcd.setCursor(0, 1);
+  lcd.print("Load:              ");
+
+  lcd.setCursor(0, 2);
+  lcd.print("Current:           ");
+
+  lcd.setCursor(0, 3);
+  lcd.print("Energy:            ");
+
+  strip.begin();
+  strip.setBrightness(BRIGHTNESS);
+  strip.show();
+}
+
+void loop() {
+  unsigned long now = millis();
+
+  if (now - lastLCDupdate >= LCD_INTERVAL) {
+    updateLCD();
+    lastLCDupdate = now;
+  }
+
+  if (now - lastLEDupdate >= LED_INTERVAL) {
+    updateFade();
+    lastLEDupdate = now;
+  }
+
+  accumulateEnergy();
+}
+
+void updateLCD() {
+  float v = readStableVoltage();
+  float current_mA = ina219.getCurrent_mA();
+
+  lcd.setCursor(6, 1);
+  lcd.print(v, 2);
+  lcd.print(" V   ");
+
+  lcd.setCursor(9, 2);
+  lcd.print(current_mA, 1);
+  lcd.print(" mA ");
+
+  lcd.setCursor(8, 3);
+  lcd.print(totalEnergy_mJ, 3);
+  lcd.print(" mJ   ");
+
+  Serial.print("V=");
+  Serial.print(v);
+  Serial.print(" | Total Energy=");
+  Serial.print(totalEnergy_mJ);
+  Serial.println(" mJ");
+}
+
+// ---------------- ENERGY ACCUMULATION CORE ----------------
+void accumulateEnergy() {
+    float v = readStableVoltage();
+
+    // Noise gate: treat very small voltages as zero
+    if (v < 0.05) {
+        v = 0.0;
+    }
+
+    // Compute actual stored energy in joules
+    float energy_J = 0.5 * CAP_VALUE * (v * v);
+
+    // Compute change since last reading
+    float deltaE = energy_J - lastEnergy_J;
+
+    // Ignore tiny noise-induced changes
+    if (fabs(deltaE) > 0.000001) {
+        // Accumulate NET energy flow (can be positive or negative)
+        totalEnergy_mJ += deltaE * 1000.0;
+    }
+
+    // Update for next cycle
+    lastEnergy_J = energy_J;
+}
+
+
+// ---------------- STABLE VOLTAGE READ ----------------
+float readStableVoltage() {
+  float sum = 0;
+
+  for (int i = 0; i < SAMPLES; i++) {
+    sum += ina219.getBusVoltage_V();
+    delay(2);
+  }
+
+  return sum / SAMPLES;
+}
+
+// ---------------- LED FADE ----------------
+void updateFade() {
+  setFade(fadeAmount);
+
+  fadeAmount += fadeDirection;
+
+  if (fadeAmount >= 255 || fadeAmount <= 0) {
+    fadeDirection *= -1;
+  }
+}
+
+void setFade(int amount) {
+  int r = amount;
+  int g = (20 * amount) / 255;
+  int b = 255 - ((155 * amount) / 255);
+
+  for (int i = 0; i < LED_COUNT; i++) {
+    strip.setPixelColor(i, strip.Color(r, g, b));
+  }
+
+  strip.show();
+}
